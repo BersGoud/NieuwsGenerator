@@ -1,9 +1,9 @@
 import requests
 import xml.etree.ElementTree as ET
-from flask import Flask, render_template, jsonify, Response
+from flask import Flask, render_template
 from cohere import Client
-from playwright.async_api import async_playwright
-import asyncio
+from playwright.sync_api import sync_playwright  # Changed to synchronous API
+import os
 
 # Initialize the Flask app
 app = Flask(__name__)
@@ -11,22 +11,18 @@ app = Flask(__name__)
 # Set your Cohere API key
 cohere_client = Client('VhaJwiI2QQGmEIYHvE0L5h3aHuu9pftsXt5BQg6D')
 
-# Global variable to store articles
-articles_data = []
-
 # Function to fetch the full content of an article using Playwright
-async def fetch_full_article(link):
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        page = await browser.new_page()
-        await page.goto(link)
-        await page.wait_for_timeout(1000)  # Wait for content to load
+def fetch_full_article(link):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(link)
+        page.wait_for_timeout(1000)  # Wait for content to load
 
-        # Extract relevant text (e.g., paragraphs and headlines)
-        content = await page.query_selector_all('p, h1, h2, h3')
-        full_text = "\n".join([await p.inner_text() for p in content])
+        content = page.query_selector_all('p, h1, h2, h3')
+        full_text = "\n".join([p.inner_text() for p in content])
 
-        await browser.close()  # Close the browser
+        browser.close()
         return full_text
 
 # Function to fetch and parse the RSS feed
@@ -35,16 +31,13 @@ def fetch_and_parse_rss_feed(url):
     root = ET.fromstring(response.content)
     articles = []
 
-    # Assuming you want to get only the latest article
-    item = root.find(".//item")  # Get the first item (latest article)
+    item = root.find(".//item")  
     if item is not None:
         title = item.find("title").text
         link = item.find("link").text
         description = item.find("description").text
         pub_date = item.find("pubDate").text
         creator = item.find("{http://purl.org/dc/elements/1.1/}creator").text + " (New York Times, NYT)"
-        
-        # Attempt to find an image URL
         image_url = item.find("{http://media.org/}thumbnail").get('url') if item.find("{http://media.org/}thumbnail") is not None else ''
 
         article = {
@@ -53,62 +46,88 @@ def fetch_and_parse_rss_feed(url):
             "description": description,
             "pub_date": pub_date,
             "creator": creator,
-            "full_text": "",  # Will be filled later
-            "image_url": image_url  # Add image URL to article
+            "full_text": "",
+            "image_url": image_url
         }
         articles.append(article)
 
     return articles
 
 # Function to process articles
-async def process_articles(articles):
+def process_articles(articles):
     processed_articles = []
     for article in articles:
-        # Fetch full article content
-        article['full_text'] = await fetch_full_article(article['link'])
+        article['full_text'] = fetch_full_article(article['link'])
+
+        ai_response = cohere_client.generate(
+            prompt=article['full_text'] + ", Rewrite this article to your own but translate it to Dutch",
+            model="command-nightly",
+            num_generations=1,
+            max_tokens=1000,
+            temperature=0.7
+        )
+        article['ai_output'] = ai_response.generations[0].text.strip()
         processed_articles.append(article)
     return processed_articles
 
-# Function to stream rewrite using Cohere API
-async def stream_rewrite(article_id):
-    article = articles_data[article_id]  # Get the article
-    full_text = article['full_text']
+# Function to save articles as HTML
+def save_article_to_html(articles):
+    if not os.path.exists('articles'):
+        os.makedirs('articles')
 
-    # Configure your parameters here
-    response = cohere_client.generate_stream(
-        prompt=full_text,
-        model="command-nightly",  # Specify your model
-        num_generations=1,
-        max_tokens=200,  # Increased tokens for a better rewrite
-        temperature=0.7,  # Adjusted for more coherent output
-    )
-
-    for chunk in response:
-        yield f"data: {chunk.text.strip()}\n\n"  # Send the generated text
+    for article in articles:
+        with app.app_context():  # Ensure app context
+            html_content = render_template('article_list.html', articles=[article])
+            file_path = f'articles/{article["title"].replace(" ", "_")}.html'
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(html_content)
+            print(f'Saved article to {file_path}')
 
 @app.route('/')
 def homepage():
-    return render_template('index.html')
+    articles = []
+    try:
+        articles = os.listdir('articles')
+    except FileNotFoundError:
+        pass  
 
-@app.route('/fetch_articles')
-async def fetch_articles():
-    # Fetch and parse RSS feed
+    if not articles:
+        return "<h1>No articles available. Please create an article first.</h1>"
+
+    return render_template('article_list.html', articles=articles)
+
+# Function to run the Flask app
+def run_flask():
+    app.run(debug=True, threaded=True)
+
+def create_articles():  # Make this synchronous
+    print("Fetching articles...")
     rss_url = "https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml"
-    global articles_data
     articles = fetch_and_parse_rss_feed(rss_url)
-    articles_data = await process_articles(articles)  # Store processed articles
+    articles_data = process_articles(articles)  # No need to run async function
+    save_article_to_html(articles_data)  
 
-    return jsonify(articles=articles_data)
+def main_menu():
+    while True:
+        print("\n=== Menu ===")
+        print("1. Create Article")
+        print("2. Run Web Server")
+        print("3. Exit")
+        choice = input("Select an option: ")
 
-@app.route('/stream_rewrite/<int:article_id>')
-def stream_rewrite_route(article_id):
-    return Response(run_async(stream_rewrite, article_id), content_type='text/event-stream')
-
-# Helper to run async functions
-def run_async(func, *args):
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    return loop.run_until_complete(func(*args))
+        if choice == '1':
+            create_articles()  # Call the sync function to create articles
+        elif choice == '2':
+            if os.path.exists('articles') and os.listdir('articles'):
+                print("Starting the Flask web server...")
+                run_flask()
+            else:
+                print("No articles exist. Please create an article first.")
+        elif choice == '3':
+            print("Exiting...")
+            break
+        else:
+            print("Invalid choice. Please try again.")
 
 if __name__ == '__main__':
-    app.run(debug=True, threaded=True)
+    main_menu()

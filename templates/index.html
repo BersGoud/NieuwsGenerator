@@ -3,90 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nieuws Artikelen</title>
+    <title>Artikel Lijst</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
-    <style>
-        .article-content {
-            margin-top: 20px;
-            margin-bottom: 20px;
-        }
-        .image {
-            margin-bottom: 20px;
-        }
-        p {
-            line-height: 1.5;
-        }
-        .stream-output {
-            margin-top: 15px;
-            border-top: 1px solid #ccc;
-            padding-top: 10px;
-            background-color: #f9f9f9;
-        }
-    </style>
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script>
-        function fetchArticles() {
-            $.getJSON('/fetch_articles', function(data) {
-                const articles = data.articles;
-                $('#articles-container').empty();
-                articles.forEach((article, index) => {
-                    const articleHTML = `
-                        <div class="box">
-                            <h2 class="subtitle">
-                                <a href="${article.link}" target="_blank">${article.title}</a>
-                            </h2>
-                            <p><strong>Door:</strong> ${article.creator}</p>
-                            <p><strong>Gepubliceerd op:</strong> ${article.pub_date}</p>
-                            ${article.image_url ? `<figure class="image"><img src="${article.image_url}" alt="${article.title} afbeelding" class="is-fullwidth"></figure>` : ''}
-                            <div class="article-content">
-                                <p><strong>Omschrijving:</strong> ${article.description}</p>
-                                <p><strong>Volledige Tekst:</strong></p>
-                                <p>${article.full_text}</p>
-                            </div>
-                            <div class="stream-output" id="stream-${index}"></div>
-                        </div>
-                        <hr>
-                    `;
-                    $('#articles-container').append(articleHTML);
-                    // Automatically start rewriting the article
-                    streamRewrite(index);
-                });
-            });
-        }
-
-        function streamRewrite(articleId) {
-            const streamDiv = $(`#stream-${articleId}`);
-            streamDiv.empty(); // Clear previous content
-
-            const eventSource = new EventSource(`/stream_rewrite/${articleId}`);
-
-            eventSource.onmessage = function(event) {
-                const newContent = $('<p>').text(event.data);
-                streamDiv.append(newContent);
-            };
-
-            eventSource.onerror = function() {
-                eventSource.close(); // Close the connection on error
-                streamDiv.append('<p>Er is een fout opgetreden bij het herschrijven.</p>');
-            };
-
-            eventSource.onopen = function() {
-                streamDiv.append('<p>Streaming gestart...</p>');
-            };
-        }
-
-        $(document).ready(function() {
-            fetchArticles();
-        });
-    </script>
 </head>
 <body>
     <section class="section">
         <div class="container">
-            <h1 class="title has-text-centered">Nieuws Artikelen</h1>
-            <div id="articles-container">
-                <!-- Articles will be loaded here asynchronously -->
-            </div>
+            <h1 class="title">Beschikbare Artikelen</h1>
+            <ul>
+                {% for article in articles %}
+                    <li>
+                        <a href="{{ url_for('static', filename='articles/' ~ article.title.replace(' ', '_') + '.html') }}" target="_blank">{{ article.title }}</a>
+                    </li>
+                {% endfor %}
+            </ul>
         </div>
     </section>
 </body>
