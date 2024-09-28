@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ article.title }}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
+    <style>
+        .article-image img {
+            object-fit: cover;
+            height: 200px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <section class="section">
+        <div class="container">
+            <h1 class="title">{{ article.title }}</h1>
+            <p><strong>Bron:</strong> {{ article.creator }}, (Reuters ©) 
+               <a href="{{ article.link }}" class="button is-link is-small">Bekijk het originele artikel</a>
+            </p>
+            <p>{{ article.pub_date }}</p>
+            <div class="article-image">
+                {% if article.image_url %}
+                <img src="{{ article.image_url }}" alt="{{ article.title }}">
+                {% endif %}
+            </div>
+            <div class="content">
+                <h2>Samenvatting:</h2>
+                <p>{{ article.ai_output }}</p>
+            </div>
+        </div>
+    </section>
+</body>
+</html>
