@@ -28,8 +28,8 @@
             </div>
             <div class="content">
                 <h2>Samenvatting:</h2>
-                <p>{{ article.ai_output }}</p>
-            </div>
+                <p>{{ article.ai_output | safe }}</p>
+            </div>            
         </div>
     </section>
 </body>

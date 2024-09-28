@@ -60,7 +60,7 @@ def process_articles(articles):
 
         # Use Cohere API to rewrite and translate the article to Dutch
         ai_response = cohere_client.generate(
-            prompt=full_text + "\nRewrite and analyse the article more in detail, finally translate the resulted output to Dutch:",
+            prompt=full_text + "\nRewrite and analyse the article more in detail open if needed open links which is detailed more. Avoid repeating and or using stopwords, generate it like a genuine article not too short or too long. Finally translate the resulted output to Dutch.:",
             model="command-nightly",
             num_generations=1,
             max_tokens=800,
@@ -73,7 +73,6 @@ def process_articles(articles):
 
 # Function to save the articles as HTML
 def save_article_to_html(articles):
-    # Clean up old articles
     if not os.path.exists('articles'):
         os.makedirs('articles')
     else:
@@ -81,15 +80,17 @@ def save_article_to_html(articles):
             os.remove(os.path.join('articles', file))
 
     for article in articles:
-        # Create the file path manually
-        article_filename = f"{article['title'].replace(' ', '_').replace('/', '_')}.html"  # Replace slashes to avoid issues
+        article_filename = f"{article['title'].replace(' ', '_').replace('/', '_')}.html"
         article['file_path'] = f"articles/{article_filename}"
 
-        with app.app_context():  # Ensure app context
-            html_content = render_template('article_template.html', article=article)  # Use correct template
+        with app.app_context():
+            html_content = render_template('article_template.html', article=article)
             file_path = f'articles/{article_filename}'
             with open(file_path, 'w', encoding='utf-8') as f:
-                f.write(html_content)
+                # Include metadata in HTML comments
+                metadata = f'<!-- Author: {article["creator"]} -->\n'
+                metadata += f'<!-- Pub Date: {article["pub_date"]} -->\n'
+                f.write(metadata + html_content)
             print(f'Saved article to {file_path}')
 
 @app.route('/')
@@ -111,27 +112,40 @@ def homepage():
 @app.route('/article/<filename>')
 def article(filename):
     file_path = f'articles/{filename}'
-    
-    # Ensure the file exists
+
     if not os.path.exists(file_path):
         return "Article not found", 404
-    
-    # Read the article's content
+
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Create an article data dictionary
+    # Extract metadata from comments
+    try:
+        author = content.split("<!-- Author: ")[1].split(" -->")[0]
+        pub_date = content.split("<!-- Pub Date: ")[1].split(" -->")[0]
+
+        # Extract the main content of the article
+        article_content = content.split('<div class="content">')[1].split('</div>')[0]
+
+        # Extract AI output
+        ai_output = content.split('<h2>Samenvatting:</h2>')[1].split('</p>')[0].replace('</p>', '')  # Ensure to handle HTML correctly
+        
+        # Extract the original link if available
+        link = content.split('<a href="')[1].split('"')[0]
+    except IndexError:
+        return "Error processing the article file", 500
+
+    # Prepare the article data for rendering
     article_data = {
         'title': filename.replace('.html', '').replace('_', ' '),
-        'content': content  # This will be the HTML content of the article
+        'content': article_content,
+        'creator': author,
+        'pub_date': pub_date,
+        'link': link,  # Include the link to the original article
+        'ai_output': ai_output  # Include the AI-generated output
     }
 
-    # You may need to parse the content to extract creator, pub_date, etc., if they are needed.
-    # Alternatively, you can keep the HTML content as it is and render it directly in your template.
-
-    # Render the content with a specific template
-    return render_template('article_template.html', article=article_data)  # Pass structured article data
-
+    return render_template('article_template.html', article=article_data)
 
 # Main function to create and serve articles
 def create_and_serve_articles():
