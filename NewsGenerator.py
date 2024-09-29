@@ -49,53 +49,54 @@ def fetch_full_article(link):
     response = requests.get(link, headers=headers)
     response.raise_for_status()
 
-    # Parse the HTML
     soup = BeautifulSoup(response.text, 'html.parser')
+
+    # Try to fetch the main article content based on the site's structure (adjust selectors as necessary)
+    content = soup.find('div', {'class': 'article-body'}) or soup.find('article')
+
+    if content:
+        return content.get_text(separator=' ', strip=True)
     
-    # Attempt to find the article's main content using a more precise selector
-    content_div = soup.find('div', class_='article-body')  # Change this based on the actual class
-    if content_div:
-        return content_div.get_text(separator=' ', strip=True)
-    
-    # Fallback: look for all paragraphs, but this should be last resort
+    # Fallback: Return all paragraphs if the structure doesn't match
     paragraphs = soup.find_all('p')
     if paragraphs:
         return ' '.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
 
     return "No article content found."
 
+
 def process_articles(articles):
     processed_articles = []
     
-    # Process the first three latest articles
-    for i, article in enumerate(articles[:3]):  # Update to process more if desired
-        print(f"Processing article {i + 1} of 3: {article['link']}")
+    for i, article in enumerate(articles[:6]):  # Update to process more if desired
+        print(f"Processing article {i + 1}: {article['link']}")
         full_text = fetch_full_article(article['link'])
 
-        # Use Cohere API to rewrite and translate the article to Dutch
+        # Construct a prompt based on the actual article's title and description
+        prompt = (
+            f"Title: {article['title']}\n"
+            f"Description: {article['description']}\n\n"
+            f"Full Article: {full_text}\n\n"
+            "Please summarize this article in detail and provide insights on potential economic, political, and global implications in atleast 10 lines."
+        )
+
+        # Use Cohere API to generate the article analysis
         ai_response = cohere_client.generate(
-            prompt=(  
-                f"{full_text}\n\n"
-                "Based on the information provided, write an in-depth analysis of the situation involving Nippon Steel's acquisition of U.S. Steel. "
-                "Consider the potential national security risks and how this acquisition may impact the American steel industry. "
-                "Include insights on historical precedents, similar cases, and possible implications for the economy and workforce. "
-                "Discuss any political or economic ramifications, and elaborate on how public opinion might be influenced by such developments. "
-                "Your output should not only summarize the details of the article but also provide a comprehensive perspective on the broader implications of this situation."
-            ),
+            prompt=prompt,
             model="command-nightly",
-            max_tokens=10000,  # Increased to allow for more content
+            max_tokens=1500,
             temperature=0.5,
             stop_sequences=["\n\n"],
         )
         
-        # Ensure AI output captures more of the full content
+        # Check if the AI generated valid content
         if ai_response.generations and ai_response.generations[0].text.strip():
             article['ai_output'] = ai_response.generations[0].text.strip()
         else:
-            article['ai_output'] = "No content generated."  # Fallback if no content returned
+            article['ai_output'] = "No content generated."
 
         processed_articles.append(article)
-    
+        
     return processed_articles
 
 
@@ -149,17 +150,22 @@ def article(filename):
 
     # Extract metadata from comments
     try:
-        author = content.split("<!-- Author: ")[1].split(" -->")[0]
-        pub_date = content.split("<!-- Pub Date: ")[1].split(" -->")[0]
+        author = content.split("<!-- Author: ")[1].split(" -->")[0] if "<!-- Author: " in content else "Unknown"
+        pub_date = content.split("<!-- Pub Date: ")[1].split(" -->")[0] if "<!-- Pub Date: " in content else "Unknown"
+        link = content.split('<a href="')[1].split('"')[0] if '<a href="' in content else "No link"
 
         # Extract the main content of the article
         article_content = content.split('<div class="content">')[1].split('</div>')[0]
 
-        # Extract AI output
-        ai_output = content.split('<h2>Samenvatting:</h2>')[1].split('</p>')[0].replace('</p>', '')  # Ensure to handle HTML correctly
+        # Try different ways to extract the AI summary
+        if '<h2>Summary</h2>' in content:
+            ai_output = content.split('<h2>Summary</h2>')[1].split('</p>')[0].replace('</p>', '').strip()
+        elif '<h2>Samenvatting:</h2>' in content:
+            ai_output = content.split('<h2>Samenvatting:</h2>')[1].split('</p>')[0].replace('</p>', '').strip()
+        else:
+            ai_output = "No summary found."
         
-        # Extract the original link if available
-        link = content.split('<a href="')[1].split('"')[0]
+
     except IndexError:
         return "Error processing the article file", 500
 
@@ -169,8 +175,8 @@ def article(filename):
         'content': article_content,
         'creator': author,
         'pub_date': pub_date,
-        'link': link,  # Include the link to the original article
-        'ai_output': ai_output  # Include the AI-generated output
+        'link': link,
+        'ai_output': ai_output
     }
 
     return render_template('article_template.html', article=article_data)

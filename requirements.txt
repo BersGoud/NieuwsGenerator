@@ -2,3 +2,4 @@ requests
 Flask
 cohere
 playwright
+bs4

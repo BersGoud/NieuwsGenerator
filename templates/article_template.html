@@ -6,31 +6,53 @@
     <title>{{ article.title }}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.3/css/bulma.min.css">
     <style>
-        .article-image img {
-            object-fit: cover;
-            height: 200px;
-            width: 100%;
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+        }
+        .article-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .title {
+            margin-bottom: 10px;
+        }
+        .meta-info {
+            font-size: 0.9em;
+            color: #555;
+        }
+        .content {
+            margin-top: 20px;
+        }
+        .content img {
+            max-width: 100%;
+            height: auto;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 10px;
+            background: #f9f9f9;
+            border-left: 5px solid #00d1b2;
         }
     </style>
 </head>
 <body>
-    <section class="section">
-        <div class="container">
-            <h1 class="title">{{ article.title }}</h1>
-            <p><strong>Bron:</strong> {{ article.creator }}, (Reuters ©) 
-               <a href="{{ article.link }}" class="button is-link is-small">Bekijk het originele artikel</a>
-            </p>
-            <p>{{ article.pub_date }}</p>
-            <div class="article-image">
-                {% if article.image_url %}
-                <img src="{{ article.image_url }}" alt="{{ article.title }}">
-                {% endif %}
-            </div>
-            <div class="content">
-                <h2>Samenvatting:</h2>
-                <p>{{ article.ai_output | safe }}</p>
-            </div>            
+    <div class="article-container">
+        <h1 class="title">{{ article.title }}</h1>
+        <p class="meta-info">
+            <strong>Author:</strong> {{ article.creator }} | <strong>Published:</strong> {{ article.pub_date }} <br>
+            <a href="{{ article.link }}" class="button is-link is-small">Read original article</a>
+        </p>
+        {% if article.image_url %}
+        <div class="article-image">
+            <img src="{{ article.image_url }}" alt="{{ article.title }}">
         </div>
-    </section>
+        {% endif %}
+        <div class="content">
+            <h2>Summary</h2>
+            <p>{{ article.ai_output | safe }}</p>
+        </div>
+    </div>
 </body>
 </html>
