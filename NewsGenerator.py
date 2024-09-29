@@ -3,6 +3,7 @@ import requests
 import xml.etree.ElementTree as ET
 from flask import Flask, render_template
 from cohere import Client
+from bs4 import BeautifulSoup  # Import BeautifulSoup
 
 # Initialize the Flask app
 app = Flask(__name__)
@@ -46,30 +47,57 @@ def fetch_full_article(link):
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     response = requests.get(link, headers=headers)
-    response.raise_for_status()  # Raise an error for bad responses
-    return response.text
+    response.raise_for_status()
+
+    # Parse the HTML
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    # Attempt to find the article's main content using a more precise selector
+    content_div = soup.find('div', class_='article-body')  # Change this based on the actual class
+    if content_div:
+        return content_div.get_text(separator=' ', strip=True)
+    
+    # Fallback: look for all paragraphs, but this should be last resort
+    paragraphs = soup.find_all('p')
+    if paragraphs:
+        return ' '.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+
+    return "No article content found."
 
 def process_articles(articles):
     processed_articles = []
     
-    # Process only the most recent article
-    if articles:  # Check if there are any articles
-        latest_article = articles[0]  # Assuming articles are sorted with the most recent first
-        print(f"Processing full article from: {latest_article['link']}")
-        full_text = fetch_full_article(latest_article['link'])
+    # Process the first three latest articles
+    for i, article in enumerate(articles[:3]):  # Update to process more if desired
+        print(f"Processing article {i + 1} of 3: {article['link']}")
+        full_text = fetch_full_article(article['link'])
 
         # Use Cohere API to rewrite and translate the article to Dutch
         ai_response = cohere_client.generate(
-            prompt=full_text + "\nRewrite and analyse the article more in detail open if needed open links which is detailed more. Avoid repeating and or using stopwords, generate it like a genuine article not too short or too long. Finally translate the resulted output to Dutch.:",
+            prompt=(  
+                f"{full_text}\n\n"
+                "Based on the information provided, write an in-depth analysis of the situation involving Nippon Steel's acquisition of U.S. Steel. "
+                "Consider the potential national security risks and how this acquisition may impact the American steel industry. "
+                "Include insights on historical precedents, similar cases, and possible implications for the economy and workforce. "
+                "Discuss any political or economic ramifications, and elaborate on how public opinion might be influenced by such developments. "
+                "Your output should not only summarize the details of the article but also provide a comprehensive perspective on the broader implications of this situation."
+            ),
             model="command-nightly",
-            num_generations=1,
-            max_tokens=800,
-            temperature=0.5
+            max_tokens=10000,  # Increased to allow for more content
+            temperature=0.5,
+            stop_sequences=["\n\n"],
         )
-        latest_article['ai_output'] = ai_response.generations[0].text.strip()
-        processed_articles.append(latest_article)
+        
+        # Ensure AI output captures more of the full content
+        if ai_response.generations and ai_response.generations[0].text.strip():
+            article['ai_output'] = ai_response.generations[0].text.strip()
+        else:
+            article['ai_output'] = "No content generated."  # Fallback if no content returned
+
+        processed_articles.append(article)
     
     return processed_articles
+
 
 # Function to save the articles as HTML
 def save_article_to_html(articles):
