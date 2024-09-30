@@ -11,13 +11,13 @@
         <div class="container">
             <h1 class="title">Overzicht van Artikelen</h1>
 
-            {% if articles %}
+            {% if artikelen %}
                 <div class="columns is-multiline">
-                    {% for article in articles %}
+                    {% for artikel in artikelen %}
                         <div class="column is-one-third">
                             <div class="box">
-                                <h2 class="subtitle">{{ article.title }}</h2>
-                                <a href="{{ url_for('article', filename=article.file_path) }}" class="button is-link">Lees meer</a>
+                                <h2 class="subtitle">{{ artikel.title }}</h2>
+                                <a href="{{ url_for('artikel', filename=artikel.file_path) }}" class="button is-link">Lees meer</a>
                             </div>
                         </div>
                     {% endfor %}

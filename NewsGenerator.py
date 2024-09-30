@@ -5,43 +5,47 @@ from flask import Flask, render_template
 from cohere import Client
 from bs4 import BeautifulSoup  # Import BeautifulSoup
 
-# Initialize the Flask app
+INFO = "Nieuws Generator, gemaakt door: \nGoudantov Bers, Van Camp Loïc\n"
+print(INFO)
+
+# Initialiseer de Flask-app
 app = Flask(__name__)
 
-# Set your Cohere API key
-cohere_client = Client('VhaJwiI2QQGmEIYHvE0L5h3aHuu9pftsXt5BQg6D')  # Replace with your actual API key
+# Cohere API-sleutel in
+cohere_client = Client('VhaJwiI2QQGmEIYHvE0L5h3aHuu9pftsXt5BQg6D')  # Vervang door je eigen (eventueel)
 
+# Functie om een RSS-feed op te halen en te parseren
 def fetch_and_parse_rss_feed(url):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     response = requests.get(url, headers=headers)
-    response.raise_for_status()  # Raise an error for bad responses
+    response.raise_for_status()  # Geeft een foutmelding bij onjuiste respons
     root = ET.fromstring(response.content)
-    articles = []
+    artikelen = []
 
-    # Fetch only the latest items from the RSS feed
+    # Haal alleen de nieuwste items uit de RSS-feed
     for item in root.findall(".//item"):
-        title = item.find("title").text
+        titel = item.find("title").text
         link = item.find("link").text
-        description = item.find("description").text
-        pub_date = item.find("pubDate").text
-        creator = item.find("{http://purl.org/dc/elements/1.1/}creator").text
-        image_url = item.find("{http://media.org/}content").get('url') if item.find("{http://media.org/}content") is not None else ''
+        beschrijving = item.find("description").text
+        publicatie_datum = item.find("pubDate").text
+        auteur = item.find("{http://purl.org/dc/elements/1.1/}creator").text
+        afbeelding_url = item.find("{http://media.org/}content").get('url') if item.find("{http://media.org/}content") is not None else ''
 
-        article = {
-            "title": title,
+        artikel = {
+            "title": titel,
             "link": link,
-            "description": description,
-            "pub_date": pub_date,
-            "creator": creator,
-            "image_url": image_url
+            "description": beschrijving,
+            "pub_date": publicatie_datum,
+            "creator": auteur,
+            "image_url": afbeelding_url
         }
-        articles.append(article)
+        artikelen.append(artikel)
 
-    return articles
+    return artikelen
 
-# Function to fetch the full article's content
+# Functie om de volledige inhoud van een artikel op te halen
 def fetch_full_article(link):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -51,36 +55,36 @@ def fetch_full_article(link):
 
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    # Try to fetch the main article content based on the site's structure (adjust selectors as necessary)
+    # Probeer de hoofdinhoud van het artikel te halen op basis van de structuur van de website
     content = soup.find('div', {'class': 'article-body'}) or soup.find('article')
 
     if content:
         return content.get_text(separator=' ', strip=True)
     
-    # Fallback: Return all paragraphs if the structure doesn't match
-    paragraphs = soup.find_all('p')
-    if paragraphs:
-        return ' '.join([p.get_text(strip=True) for p in paragraphs if p.get_text(strip=True)])
+    # optie: retourneer alle paragrafen als de structuur niet overeenkomt
+    paragrafen = soup.find_all('p')
+    if paragrafen:
+        return ' '.join([p.get_text(strip=True) for p in paragrafen if p.get_text(strip=True)])
 
-    return "No article content found."
+    return "Geen artikelinhoud gevonden."
 
-
-def process_articles(articles):
-    processed_articles = []
+# Verwerkt artikelen en voegt samenvattingen toe
+def process_articles(artikelen):
+    verwerkte_artikelen = []
     
-    for i, article in enumerate(articles[:6]):  # Update to process more if desired
-        print(f"Processing article {i + 1}: {article['link']}")
-        full_text = fetch_full_article(article['link'])
+    for i, artikel in enumerate(artikelen[:6]):  # Update om meer artikelen te verwerken indien gewenst
+        print(f"Verwerken artikel {i + 1}: {artikel['link']}")
+        volledige_tekst = fetch_full_article(artikel['link'])
 
-        # Construct a prompt based on the actual article's title and description
+        # Bouw een prompt op basis van de titel en beschrijving van het artikel
         prompt = (
-            f"Title: {article['title']}\n"
-            f"Description: {article['description']}\n\n"
-            f"Full Article: {full_text}\n\n"
-            "Please summarize this article in detail and provide insights on potential economic, political, and global implications in atleast 10 lines."
+            f"Title: {artikel['title']}\n"
+            f"Description: {artikel['description']}\n\n"
+            f"Full Article: {volledige_tekst}\n\n"
+            "Vat dit artikel gedetailleerd samen en geef inzichten in de mogelijke economische, politieke en wereldwijde implicaties in ten minste 10 regels."
         )
 
-        # Use Cohere API to generate the article analysis
+        # Gebruik Cohere API om de artikelanalyse te genereren
         ai_response = cohere_client.generate(
             prompt=prompt,
             model="command-nightly",
@@ -89,105 +93,103 @@ def process_articles(articles):
             stop_sequences=["\n\n"],
         )
         
-        # Check if the AI generated valid content
+        # Controleer of de AI geldige inhoud heeft gegenereerd
         if ai_response.generations and ai_response.generations[0].text.strip():
-            article['ai_output'] = ai_response.generations[0].text.strip()
+            artikel['ai_output'] = ai_response.generations[0].text.strip()
         else:
-            article['ai_output'] = "No content generated."
+            artikel['ai_output'] = "Geen inhoud gegenereerd."
 
-        processed_articles.append(article)
+        verwerkte_artikelen.append(artikel)
         
-    return processed_articles
+    return verwerkte_artikelen
 
-
-# Function to save the articles as HTML
-def save_article_to_html(articles):
-    if not os.path.exists('articles'):
-        os.makedirs('articles')
+# Functie om artikelen op te slaan als HTML
+def save_article_to_html(artikelen):
+    if not os.path.exists('artikelen'):
+        os.makedirs('artikelen')
     else:
-        for file in os.listdir('articles'):
-            os.remove(os.path.join('articles', file))
+        for file in os.listdir('artikelen'):
+            os.remove(os.path.join('artikelen', file))
 
-    for article in articles:
-        article_filename = f"{article['title'].replace(' ', '_').replace('/', '_')}.html"
-        article['file_path'] = f"articles/{article_filename}"
+    for artikel in artikelen:
+        artikel_filename = f"{artikel['title'].replace(' ', '_').replace('/', '_')}.html"
+        artikel['file_path'] = f"artikelen/{artikel_filename}"
 
         with app.app_context():
-            html_content = render_template('article_template.html', article=article)
-            file_path = f'articles/{article_filename}'
+            html_content = render_template('article_template.html', article=artikel)
+            file_path = f'artikelen/{artikel_filename}'
             with open(file_path, 'w', encoding='utf-8') as f:
-                # Include metadata in HTML comments
-                metadata = f'<!-- Author: {article["creator"]} -->\n'
-                metadata += f'<!-- Pub Date: {article["pub_date"]} -->\n'
+                # Voeg metadata toe in HTML-opmerkingen
+                metadata = f'<!-- Auteur: {artikel["creator"]} -->\n'
+                metadata += f'<!-- Publicatiedatum: {artikel["pub_date"]} -->\n'
                 f.write(metadata + html_content)
-            print(f'Saved article to {file_path}')
+            print(f'Artikel opgeslagen in {file_path}')
 
 @app.route('/')
 def homepage():
-    articles = []  # Initialize an empty list
+    artikelen = []  # Initialiseert een lege lijst
 
-    # Read articles from the 'articles' directory
-    if os.path.exists('articles'):
-        for filename in os.listdir('articles'):
+    # Lees artikelen uit de 'artikelen' directory
+    if os.path.exists('artikelen'):
+        for filename in os.listdir('artikelen'):
             if filename.endswith('.html'):
-                title = filename.replace('.html', '').replace('_', ' ')
-                articles.append({
-                    'title': title,
-                    'file_path': filename  # Store the relative path
+                titel = filename.replace('.html', '').replace('_', ' ')
+                artikelen.append({
+                    'title': titel,
+                    'file_path': filename  # Sla het pad op
                 })
 
-    return render_template('homepage_template.html', articles=articles)  # Use homepage template
+    return render_template('homepage_template.html', artikelen=artikelen)  # Gebruik homepage template
 
-@app.route('/article/<filename>')
+@app.route('/artikel/<filename>')
 def article(filename):
-    file_path = f'articles/{filename}'
+    file_path = f'artikelen/{filename}'
 
     if not os.path.exists(file_path):
-        return "Article not found", 404
+        return "Artikel niet gevonden", 404
 
     with open(file_path, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    # Extract metadata from comments
+    # Haal metadata uit de opmerkingen
     try:
-        author = content.split("<!-- Author: ")[1].split(" -->")[0] if "<!-- Author: " in content else "Unknown"
-        pub_date = content.split("<!-- Pub Date: ")[1].split(" -->")[0] if "<!-- Pub Date: " in content else "Unknown"
-        link = content.split('<a href="')[1].split('"')[0] if '<a href="' in content else "No link"
+        auteur = content.split("<!-- Auteur: ")[1].split(" -->")[0] if "<!-- Auteur: " in content else "Onbekend"
+        publicatie_datum = content.split("<!-- Publicatiedatum: ")[1].split(" -->")[0] if "<!-- Publicatiedatum: " in content else "Onbekend"
+        link = content.split('<a href="')[1].split('"')[0] if '<a href="' in content else "Geen link"
 
-        # Extract the main content of the article
-        article_content = content.split('<div class="content">')[1].split('</div>')[0]
+        # Haal de hoofdinhoud van het artikel op
+        artikel_inhoud = content.split('<div class="content">')[1].split('</div>')[0]
 
-        # Try different ways to extract the AI summary
-        if '<h2>Summary</h2>' in content:
-            ai_output = content.split('<h2>Summary</h2>')[1].split('</p>')[0].replace('</p>', '').strip()
+        # Probeer de AI-samenvatting te uithalen
+        if '<h2>Samenvatting</h2>' in content:
+            ai_output = content.split('<h2>Samenvatting</h2>')[1].split('</p>')[0].replace('</p>', '').strip()
         elif '<h2>Samenvatting:</h2>' in content:
             ai_output = content.split('<h2>Samenvatting:</h2>')[1].split('</p>')[0].replace('</p>', '').strip()
         else:
-            ai_output = "No summary found."
+            ai_output = "Geen samenvatting gevonden."
         
-
     except IndexError:
-        return "Error processing the article file", 500
+        return "Fout bij het verwerken van het artikelbestand", 500
 
-    # Prepare the article data for rendering
-    article_data = {
+    # Bereid de gegevens voor om weer te geven
+    artikel_data = {
         'title': filename.replace('.html', '').replace('_', ' '),
-        'content': article_content,
-        'creator': author,
-        'pub_date': pub_date,
+        'content': artikel_inhoud,
+        'creator': auteur,
+        'pub_date': publicatie_datum,
         'link': link,
         'ai_output': ai_output
     }
 
-    return render_template('article_template.html', article=article_data)
+    return render_template('article_template.html', artikel=artikel_data)
 
-# Main function to create and serve articles
+# Hoofdfunctie om artikelen te maken en de server te starten
 def create_and_serve_articles():
     rss_url = "https://www.reutersagency.com/feed/?best-sectors=economy&post_type=best"
-    articles = fetch_and_parse_rss_feed(rss_url)
-    processed_articles = process_articles(articles)
-    save_article_to_html(processed_articles)
-    print("Starting the Flask web server...")
+    artikelen = fetch_and_parse_rss_feed(rss_url)
+    verwerkte_artikelen = process_articles(artikelen)
+    save_article_to_html(verwerkte_artikelen)
+    print("Starten van de Flask webserver...")
     app.run(debug=True)
 
 if __name__ == '__main__':
