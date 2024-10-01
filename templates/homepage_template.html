@@ -17,7 +17,7 @@
                         <div class="column is-one-third">
                             <div class="box">
                                 <h2 class="subtitle">{{ artikel.title }}</h2>
-                                <a href="{{ url_for('artikel', filename=artikel.file_path) }}" class="button is-link">Lees meer</a>
+                                <a href="{{ url_for('article', filename=artikel.file_path) }}" class="button is-link">Lees meer</a>
                             </div>
                         </div>
                     {% endfor %}

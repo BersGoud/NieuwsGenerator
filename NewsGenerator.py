@@ -4,6 +4,7 @@ import xml.etree.ElementTree as ET
 from flask import Flask, render_template
 from cohere import Client
 from bs4 import BeautifulSoup  # Import BeautifulSoup
+import time
 
 INFO = "Nieuws Generator, gemaakt door: \nGoudantov Bers, Van Camp Loïc\n"
 print(INFO)
@@ -38,35 +39,50 @@ def fetch_and_parse_rss_feed(url):
             "link": link,
             "description": beschrijving,
             "pub_date": publicatie_datum,
-            "creator": auteur,
+            "creator": auteur + ", Copyright © New York Times ",
             "image_url": afbeelding_url
         }
         artikelen.append(artikel)
 
     return artikelen
 
+
 # Functie om de volledige inhoud van een artikel op te halen
-def fetch_full_article(link):
+def fetch_full_article(link, retries=3, delay=5):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
-    response = requests.get(link, headers=headers)
-    response.raise_for_status()
-
-    soup = BeautifulSoup(response.text, 'html.parser')
-
-    # Probeer de hoofdinhoud van het artikel te halen op basis van de structuur van de website
-    content = soup.find('div', {'class': 'article-body'}) or soup.find('article')
-
-    if content:
-        return content.get_text(separator=' ', strip=True)
     
-    # optie: retourneer alle paragrafen als de structuur niet overeenkomt
-    paragrafen = soup.find_all('p')
-    if paragrafen:
-        return ' '.join([p.get_text(strip=True) for p in paragrafen if p.get_text(strip=True)])
+    for attempt in range(retries):
+        try:
+            response = requests.get(link, headers=headers, timeout=10)  # Set a timeout to avoid long waits
+            response.raise_for_status()
 
-    return "Geen artikelinhoud gevonden."
+            soup = BeautifulSoup(response.text, 'html.parser')
+
+            # Probeer de hoofdinhoud van het artikel te halen op basis van de structuur van de website
+            content = soup.find('div', {'class': 'article-body'}) or soup.find('article')
+
+            if content:
+                return content.get_text(separator=' ', strip=True)
+            
+            # optie: retourneer alle paragrafen als de structuur niet overeenkomt
+            paragrafen = soup.find_all('p')
+            if paragrafen:
+                return ' '.join([p.get_text(strip=True) for p in paragrafen if p.get_text(strip=True)])
+
+            return "Geen artikelinhoud gevonden."
+
+        except (requests.exceptions.HTTPError, requests.exceptions.Timeout) as e:
+            print(f"Error fetching article at {link}: {str(e)}")
+            if attempt < retries - 1:  # If retries are left, wait and retry
+                print(f"Retrying... ({attempt + 1}/{retries})")
+                time.sleep(delay)
+            else:
+                return f"Kon het artikel niet ophalen na {retries} pogingen."
+
+    return "Onbekende fout opgetreden bij het ophalen van het artikel."
+
 
 # Verwerkt artikelen en voegt samenvattingen toe
 def process_articles(artikelen):
@@ -103,6 +119,7 @@ def process_articles(artikelen):
         
     return verwerkte_artikelen
 
+
 # Functie om artikelen op te slaan als HTML
 def save_article_to_html(artikelen):
     if not os.path.exists('artikelen'):
@@ -125,6 +142,31 @@ def save_article_to_html(artikelen):
                 f.write(metadata + html_content)
             print(f'Artikel opgeslagen in {file_path}')
 
+
+# Hoofdfunctie om artikelen te maken en de server te starten
+def create_and_serve_articles():
+    # RSS-feed van Reuters Agency
+    rss_url = "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best"
+    
+    artikelen = []  # Initialiseer een lege lijst voor artikelen
+    
+    # Check indien er bestaande artikelen zijn
+    if os.path.exists('artikelen'):
+        existing_files = [f for f in os.listdir('artikelen') if f.endswith('.html')]
+        if existing_files:
+            # Prompt de gebruiker om bestaande artikelen te gebruiken of nieuwe te verkrijgen
+            serve_existing = input("Er zijn bestaande artikelen gevonden. Wilt u de Flask-server starten op deze artikelen? (ja/nee): ").strip().lower()
+            if serve_existing == 'ja':
+                print("Server wordt gestart op bestaande artikelen...")
+                return  # Stop de server en gebruik bestaande artikelen
+            else:
+                print("Nieuwe artikelen worden opgehaald...")
+    
+    artikelen = fetch_and_parse_rss_feed(rss_url)
+    verwerkte_artikelen = process_articles(artikelen)
+    save_article_to_html(verwerkte_artikelen)
+
+
 @app.route('/')
 def homepage():
     artikelen = []  # Initialiseert een lege lijst
@@ -140,6 +182,7 @@ def homepage():
                 })
 
     return render_template('homepage_template.html', artikelen=artikelen)  # Gebruik homepage template
+
 
 @app.route('/artikel/<filename>')
 def article(filename):
@@ -161,10 +204,10 @@ def article(filename):
         artikel_inhoud = content.split('<div class="content">')[1].split('</div>')[0]
 
         # Probeer de AI-samenvatting te uithalen
-        if '<h2>Samenvatting</h2>' in content:
-            ai_output = content.split('<h2>Samenvatting</h2>')[1].split('</p>')[0].replace('</p>', '').strip()
-        elif '<h2>Samenvatting:</h2>' in content:
-            ai_output = content.split('<h2>Samenvatting:</h2>')[1].split('</p>')[0].replace('</p>', '').strip()
+        if '<h2>Summary</h2>' in content:
+            ai_output = content.split('<h2>Summary</h2>')[1].split('</p>')[0].replace('</p>', '').strip()
+        elif '<h2>Summary:</h2>' in content:
+            ai_output = content.split('<h2>Summary:</h2>')[1].split('</p>')[0].replace('</p>', '').strip()
         else:
             ai_output = "Geen samenvatting gevonden."
         
@@ -181,16 +224,10 @@ def article(filename):
         'ai_output': ai_output
     }
 
-    return render_template('article_template.html', artikel=artikel_data)
+    return render_template('article_template.html', article=artikel_data)
 
-# Hoofdfunctie om artikelen te maken en de server te starten
-def create_and_serve_articles():
-    rss_url = "https://www.reutersagency.com/feed/?best-sectors=economy&post_type=best"
-    artikelen = fetch_and_parse_rss_feed(rss_url)
-    verwerkte_artikelen = process_articles(artikelen)
-    save_article_to_html(verwerkte_artikelen)
-    print("Starten van de Flask webserver...")
-    app.run(debug=True)
 
 if __name__ == '__main__':
+    print("Starten van de Flask webserver...")
     create_and_serve_articles()
+    app.run(debug=False)  # Start de Flask-app
