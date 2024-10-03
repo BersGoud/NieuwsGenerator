@@ -32,7 +32,6 @@ def generate_sensational_title(original_title):
     return response.generations[0].text.strip() if response.generations else original_title
 
 # Function to fetch and parse RSS feed
-# Function to fetch and parse RSS feed
 def fetch_and_parse_rss_feed(url):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -67,16 +66,13 @@ def fetch_and_parse_rss_feed(url):
 
 # Helper function to extract sectors from the description
 def extract_sectors_from_description(description):
-    # Implement a method to extract sectors from the description
-    # This is a placeholder and may need to be customized depending on the description format
     if "Sectors:" in description:
         start_index = description.index("Sectors:") + len("Sectors:")
-        end_index = description.find("\n", start_index)  # Find the next line break
-        sectors = description[start_index:end_index].strip()  # Get sectors and trim whitespace
-        return sectors.split(", ")  # Split into a list if multiple sectors
+        end_index = description.find("\n", start_index)
+        sectors = description[start_index:end_index].strip()
+        return sectors.split(", ")
     return None
 
-# Function to fetch the full article content
 # Function to fetch the full article content with increased timeout and improved retry logic
 def fetch_full_article(link, retries=2, delay=5):
     headers = {
@@ -109,7 +105,6 @@ def fetch_full_article(link, retries=2, delay=5):
                 return f"Failed to fetch after {retries} attempts.", None
 
     return "Unknown error occurred.", None
-
 
 # Function to upload image to WordPress and get media ID
 def upload_image_to_wordpress(image_url):
@@ -223,14 +218,30 @@ def create_tag(tag_name):
         json=data
     )
     if response.status_code == 201:
-        return response.json().get('id')  # Return the new tag ID
+        return response.json().get('id')  # Get the tag ID
+    elif "A term with the name provided already exists" in response.text:
+        return None  # Return None if the tag already exists
     else:
-        print(f"Fout bij het aanmaken van tag '{tag_name}': {response.text}")
+        print(f"Fout bij het maken van tag: {response.text}")
         return None
+
+# Function to fetch existing categories from WordPress
+def fetch_existing_categories():
+    response = requests.get(
+        WP_URL.replace('/posts', '/categories'),  # Adjust endpoint to fetch categories
+        auth=HTTPBasicAuth(WP_USER, WP_PASSWORD)
+    )
+    if response.status_code == 200:
+        return {cat['name']: cat['id'] for cat in response.json()}  # Create a dictionary of category names and IDs
+    else:
+        print(f"Error fetching categories: {response.text}")
+        return {}
 
 # Function to post articles to WordPress
 def post_to_wordpress(articles):
     existing_tags = fetch_existing_tags()  # Get existing tags at the start
+    existing_categories = fetch_existing_categories()  # Get existing categories at the start
+
     for article in articles:
         media_id = None
         if article['image_url']:
@@ -243,14 +254,15 @@ def post_to_wordpress(articles):
         if not tag_id:  # If tag does not exist, create it
             tag_id = create_tag(author_tag_name)
 
-        # Prepare data for WordPress
+        # Prepare data for WordPress, ensuring we use category IDs
+        category_id = existing_categories.get(article['category'])  # Get the category ID
         data = {
             'title': article['title'],
             'content': f"<h2>{article['title']}</h2><p><strong>Auteur:</strong> {article['creator']}</p><p><strong>Publicatie Datum:</strong> {article['pub_date']}</p><p><strong>Categorie:</strong> {article['category']}</p><p>{article['ai_output']}</p><p>Origineel Artikel: <a href='{article['link']}'>Link</a></p>",
-            'status': 'publish',  # Publish immediately, can also use 'draft' to save as draft
-            # WIP 'featured_media': media_id,  # Use the media ID if available
-            # WIP 'tags': [tag_id] if tag_id else [],  # Use the tag ID
-            'categories': article['category']
+            'status': 'publish',  # Publish immediately
+            'featured_media': media_id,  # Use the media ID if available
+            'tags': [tag_id] if tag_id else [],  # Use the tag ID
+            'categories': [category_id] if category_id else [],  # Ensure we send a list of category IDs
         }
 
         # Post to WordPress
@@ -265,30 +277,17 @@ def post_to_wordpress(articles):
         else:
             print(f"Fout bij het publiceren van artikel '{article['title']}': {response.text}")
 
-# Main function to create and publish articles
-def create_and_publish_articles():
-    rss_url = "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best"
+# Example usage
+def main():
+    rss_feed_url = "https://www.reuters.com/tools/rss"  # Reuters RSS feed
+    number_of_articles = 5  # Define how many articles to process
     
-    articles = []  # Initialize an empty list for articles
-    
-    articles = fetch_and_parse_rss_feed(rss_url)
-
-    # Ask the user for the number of articles to generate
-    try:
-        number_of_articles = int(input("Hoeveel artikelen wilt u genereren? (Waarschuwing hoe meer artikelen, hoe langer het duurt.): "))
-    except ValueError:
-        print("Ongeldige invoer, standaard naar 6 artikelen.")
-        number_of_articles = 6
-
-    start_total_time = time.time()  # Start the total time
+    # Fetch RSS feed and process articles
+    articles = fetch_and_parse_rss_feed(rss_feed_url)
     processed_articles = process_articles(articles, number_of_articles)
 
-    # Publish articles to WordPress
+    # Post articles to WordPress
     post_to_wordpress(processed_articles)
-    
-    total_time = time.time() - start_total_time  # Total time for article generation
-    print(f"Totaal tijd voor het genereren en publiceren van {number_of_articles} artikelen: {total_time:.2f} seconden")
 
-if __name__ == '__main__':
-    print("Start het genereren en publiceren van artikelen...")
-    create_and_publish_articles()
+if __name__ == "__main__":
+    main()
