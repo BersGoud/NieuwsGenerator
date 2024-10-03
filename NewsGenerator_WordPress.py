@@ -274,19 +274,23 @@ def post_to_wordpress(articles):
 
         if response.status_code == 201:
             print(f"Artikel '{article['title']}' succesvol gepubliceerd op WordPress.")
-        else:
-            print(f"Fout bij het publiceren van artikel '{article['title']}': {response.text}")
 
 # Example usage
 def main():
-    rss_feed_url = "https://www.reuters.com/tools/rss"  # Reuters RSS feed
-    number_of_articles = 5  # Define how many articles to process
+    rss_feed_url = "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best"  # Reuters RSS feed
     
-    # Fetch RSS feed and process articles
+    # Prompt de gebruiker voor het aantal artikels
+    try:
+        number_of_articles = int(input("Hoeveel artikels wilt u verwerken? Voer een nummer in: "))
+    except ValueError:
+        print("Ongeldige invoer. Het aantal wordt standaard ingesteld op 5.")
+        number_of_articles = 5  # Standaardwaarde als de invoer ongeldig is
+
+    # Fetch RSS feed en verwerk artikels
     articles = fetch_and_parse_rss_feed(rss_feed_url)
     processed_articles = process_articles(articles, number_of_articles)
 
-    # Post articles to WordPress
+    # Post artikels op WordPress
     post_to_wordpress(processed_articles)
 
 if __name__ == "__main__":
