@@ -77,38 +77,38 @@ def extract_sectors_from_description(description):
     return None
 
 # Function to fetch the full article content
-def fetch_full_article(link, retries=3, delay=5):
+# Function to fetch the full article content with increased timeout and improved retry logic
+def fetch_full_article(link, retries=2, delay=5):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
     }
     
     for attempt in range(retries):
         try:
-            response = requests.get(link, headers=headers, timeout=10)
+            print(f"Fetching article from {link}, attempt {attempt + 1}/{retries}")
+            response = requests.get(link, headers=headers, timeout=30)  # Increased timeout
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, 'html.parser')
             content = soup.find('div', {'id': 'main-content'})  # Change to use id instead of class
 
             if content:
-                # Extract image using specified format
-                img_tag = content.find('img', {'decoding': 'async'})  # Adjusted to find image correctly
+                img_tag = content.find('img', {'decoding': 'async'})
                 image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else None
-                
-                # Return both content and image_url
                 return content.get_text(separator=' ', strip=True), image_url
             else:
-                return "Inhoud niet gevonden.", None
-            
-        except (requests.exceptions.HTTPError, requests.exceptions.Timeout) as e:
-            print(f"Error fetching article at {link}: {str(e)}")
-            if attempt < retries - 1:  
-                print(f"Retrying... ({attempt + 1}/{retries})")
-                time.sleep(delay)
-            else:
-                return f"Kon het artikel niet ophalen na {retries} pogingen.", None
+                print("Content not found. Returning fallback content.")
+                return "Inhoud niet gevonden.", None  # Return default text
 
-    return "Onbekende fout opgetreden bij het ophalen van het artikel.", None
+        except (requests.exceptions.HTTPError, requests.exceptions.Timeout, requests.exceptions.ConnectionError) as e:
+            print(f"Error fetching article at {link}: {str(e)}")
+            if attempt < retries - 1:
+                print(f"Retrying... ({attempt + 1}/{retries})")
+                time.sleep(delay * (attempt + 1))  # Increased delay for retries
+            else:
+                return f"Failed to fetch after {retries} attempts.", None
+
+    return "Unknown error occurred.", None
 
 
 # Function to upload image to WordPress and get media ID
