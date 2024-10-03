@@ -32,6 +32,7 @@ def generate_sensational_title(original_title):
     return response.generations[0].text.strip() if response.generations else original_title
 
 # Function to fetch and parse RSS feed
+# Function to fetch and parse RSS feed
 def fetch_and_parse_rss_feed(url):
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -47,19 +48,33 @@ def fetch_and_parse_rss_feed(url):
         description = item.find("description").text
         publication_date = item.find("pubDate").text
         creator = item.find("{http://purl.org/dc/elements/1.1/}creator").text
+        
+        # Extract sectors information from item description
+        sectors = extract_sectors_from_description(description)  # New helper function
 
         article = {
             "title": title,
             "link": link,
             "description": description,
             "pub_date": publication_date,
-            "creator": creator,
-            "image_url": None,  # Initialize image_url to None
-            "category": None  # Initialize category to None
+            "creator": creator + ", Copyright © Reuters ",
+            "image_url": None,
+            "category": sectors  # Store sectors in category field
         }
         articles.append(article)
 
     return articles
+
+# Helper function to extract sectors from the description
+def extract_sectors_from_description(description):
+    # Implement a method to extract sectors from the description
+    # This is a placeholder and may need to be customized depending on the description format
+    if "Sectors:" in description:
+        start_index = description.index("Sectors:") + len("Sectors:")
+        end_index = description.find("\n", start_index)  # Find the next line break
+        sectors = description[start_index:end_index].strip()  # Get sectors and trim whitespace
+        return sectors.split(", ")  # Split into a list if multiple sectors
+    return None
 
 # Function to fetch the full article content
 def fetch_full_article(link, retries=3, delay=5):
@@ -73,18 +88,17 @@ def fetch_full_article(link, retries=3, delay=5):
             response.raise_for_status()
 
             soup = BeautifulSoup(response.text, 'html.parser')
-            content = soup.find('div', {'class': 'article-body'}) or soup.find('article')
+            content = soup.find('div', {'id': 'main-content'})  # Change to use id instead of class
 
-            if content is None:
-                print(f"Geen inhoud gevonden voor {link}. Proberen alternatieve zoekmethoden...")
-                content = soup.find('main')  # Try to find a <main> tag as an alternative
-
-            # Extract image using specified format
-            img_tag = content.find('img', fetchpriority='high') if content else None
-            image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else None
-            
-            # Return both content and image_url
-            return content.get_text(separator=' ', strip=True) if content else "Geen inhoud beschikbaar.", image_url
+            if content:
+                # Extract image using specified format
+                img_tag = content.find('img', {'decoding': 'async'})  # Adjusted to find image correctly
+                image_url = img_tag['src'] if img_tag and img_tag.has_attr('src') else None
+                
+                # Return both content and image_url
+                return content.get_text(separator=' ', strip=True), image_url
+            else:
+                return "Inhoud niet gevonden.", None
             
         except (requests.exceptions.HTTPError, requests.exceptions.Timeout) as e:
             print(f"Error fetching article at {link}: {str(e)}")
@@ -102,13 +116,14 @@ def upload_image_to_wordpress(image_url):
     try:
         response = requests.get(image_url)
         response.raise_for_status()  # Ensure the image URL is valid
-
+        
         media_data = {
             'file': response.content,
             'caption': 'Image from article'
         }
         headers = {
             'Content-Disposition': f'attachment; filename="{os.path.basename(image_url)}"',
+            'Content-Type': response.headers.get('Content-Type', 'application/octet-stream')  # Ensure correct content type
         }
 
         media_response = requests.post(
@@ -122,6 +137,7 @@ def upload_image_to_wordpress(image_url):
             return media_response.json().get('id')  # Get the media ID
         else:
             print(f"Fout bij het uploaden van afbeelding: {media_response.text}")
+            print(f"Status code: {media_response.status_code}, Headers: {media_response.headers}")
             return None
     except Exception as e:
         print(f"Fout bij het ophalen van afbeelding: {str(e)}")
@@ -232,8 +248,9 @@ def post_to_wordpress(articles):
             'title': article['title'],
             'content': f"<h2>{article['title']}</h2><p><strong>Auteur:</strong> {article['creator']}</p><p><strong>Publicatie Datum:</strong> {article['pub_date']}</p><p><strong>Categorie:</strong> {article['category']}</p><p>{article['ai_output']}</p><p>Origineel Artikel: <a href='{article['link']}'>Link</a></p>",
             'status': 'publish',  # Publish immediately, can also use 'draft' to save as draft
-            'featured_media': media_id,  # Use the media ID if available
-            'tags': [tag_id] if tag_id else []  # Use the tag ID
+            # WIP 'featured_media': media_id,  # Use the media ID if available
+            # WIP 'tags': [tag_id] if tag_id else [],  # Use the tag ID
+            'categories': article['category']
         }
 
         # Post to WordPress
