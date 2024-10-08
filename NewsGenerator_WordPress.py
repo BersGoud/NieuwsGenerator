@@ -10,7 +10,7 @@ INFO = "Nieuws Generator, gemaakt door: \nGoudantov Bers, Van Camp Loïc\n"
 print(INFO)
 
 # Cohere API key
-cohere_client = Client('VhaJwiI2QQGmEIYHvE0L5h3aHuu9pftsXt5BQg6D') # maandelijkse limiet bereikt :/
+cohere_client = Client('olCf36tGzsK7oLU6UWkSSO5iqUaisf7kCgPvTa9N')
 
 # WordPress API details
 WP_URL = "https://yapnews.meubel-centrum.be/wp-json/wp/v2/posts"  # Wordpress url

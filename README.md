@@ -51,6 +51,7 @@ Volg deze stappen om het project te installeren:
     ```
 2. Voer het aantal artikelen in dat je wilt verwerken wanneer hierom wordt gevraagd.
 3. De artikelen worden opgehaald, verwerkt, en gepubliceerd op je WordPress-site. Controleer je WordPress-dashboard voor de gegenereerde berichten.
+4. Bezoek deze link om de artikelen te kunnen zien: [yapnews site](https://yapnews.meubel-centrum.be/)
 
 ### Structuur van het project
 - **`NewsGenerator_Flask.py`**: Het script dat nieuwsartikelen verzamelt, samenvat en op een lokale server toont via Flask.

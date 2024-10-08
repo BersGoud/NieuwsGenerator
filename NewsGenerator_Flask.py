@@ -13,7 +13,7 @@ print(INFO)
 app = Flask(__name__)
 
 # Cohere API-sleutel in
-cohere_client = Client('VhaJwiI2QQGmEIYHvE0L5h3aHuu9pftsXt5BQg6D')
+cohere_client = Client('olCf36tGzsK7oLU6UWkSSO5iqUaisf7kCgPvTa9N')
 
 # Functie om een sensationele titel te genereren
 def generate_sensational_title(original_title):
