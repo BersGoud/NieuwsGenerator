@@ -1,73 +1,81 @@
 # Nieuws Automatisering Project
 
 ## Inhoud
-- [Nieuws Automatisering Project](#nieuws-automatisering-project)
-  - [Inhoud](#inhoud)
-    - [Overzicht](#overzicht)
-    - [Installatie](#installatie)
-    - [Gebruik](#gebruik)
-    - [Structuur van het project](#structuur-van-het-project)
-    - [Technologieën](#technologieën)
-    - [Ethische Overwegingen](#ethische-overwegingen)
-      - [Accuraatheid van Informatie:](#accuraatheid-van-informatie)
-      - [Copyright en Bronvermelding:](#copyright-en-bronvermelding)
-      - [Transparantie van AI-gebruik:](#transparantie-van-ai-gebruik)
-    - [Auteurs](#auteurs)
+- [Overzicht](#overzicht)
+- [Installatie](#installatie)
+- [Gebruik](#gebruik)
+- [Structuur van het project](#structuur-van-het-project)
+- [Technologieën](#technologieën)
+- [Ethische Overwegingen](#ethische-overwegingen)
+  - [Accuraatheid van Informatie](#accuraatheid-van-informatie)
+  - [Copyright en Bronvermelding](#copyright-en-bronvermelding)
+  - [Transparantie van AI-gebruik](#transparantie-van-ai-gebruik)
+- [Auteurs](#auteurs)
 
-### Overzicht
-Dit project automatiseert het proces van nieuws verzamelen, vertalen en publiceren op een nieuwssite. We gebruiken een RSS-feed om nieuwsartikelen te verzamelen, AI voor vertaling en samenvattingen, en Flask voor het hosten van een eenvoudige website met de artikelen.
+## Overzicht
+Dit project automatiseert het verzamelen, verwerken en publiceren van nieuwsartikelen via RSS-feeds, AI, en publicatie op een WordPress-website of een lokale webserver via Flask. Er zijn twee versies beschikbaar:
+
+- **NewsGenerator_Flask.py**: De Flask-gebaseerde versie die lokaal draait.
+- **NewsGenerator_WordPress.py**: De WordPress-gebaseerde versie die artikelen direct naar een WordPress-site publiceert.
 
 ### Installatie
 Volg deze stappen om het project te installeren:
-1. Clone de repository:
+
+1. **Clone de repository**:
     ```bash
     git clone <repository-url>
     cd <repository-folder>
     ```
-2. Installeer de vereiste dependencies met:
+   
+2. **Installeer de vereiste dependencies**:
     ```bash
     pip install -r requirements.txt
     ```
-
-3. Zorg ervoor dat je een API-sleutel hebt voor de generative AI service (bijv. Cohere). Voeg deze sleutel toe in het Python-bestand.
+   
+3. **API-sleutel configuratie**:
+    Voeg je generative AI-sleutel (zoals van Cohere) toe in de Python-bestanden (`NewsGenerator_Flask.py` en `NewsGenerator_WordPress.py`) om de AI-functionaliteiten te gebruiken.
 
 ### Gebruik
+
+#### Flask-versie (`NewsGenerator_Flask.py`)
 1. Start de Flask-webserver:
     ```bash
-    python NewsGenerator.py
+    python NewsGenerator_Flask.py
     ```
+2. Open je browser en ga naar `http://localhost:5000` om de gegenereerde artikelen te bekijken. Deze worden lokaal weergegeven en bevatten AI-samenvattingen.
 
-2. Open je browser en navigeer naar `http://localhost:5000` om de homepage te bekijken.
-
-3. De nieuwsartikelen worden opgehaald, vertaald en samengevat. Elke samenvatting kan worden bekeken door op de links te klikken.
+#### WordPress-versie (`NewsGenerator_WordPress.py`)
+1. De WordPress-versie publiceert direct op een opgegeven WordPress-site. Voer het script uit:
+    ```bash
+    python NewsGenerator_WordPress.py
+    ```
+2. Voer het aantal artikelen in dat je wilt verwerken wanneer hierom wordt gevraagd.
+3. De artikelen worden opgehaald, verwerkt, en gepubliceerd op je WordPress-site. Controleer je WordPress-dashboard voor de gegenereerde berichten.
 
 ### Structuur van het project
-- `NewsGenerator.py`: Het hoofdscript dat de server opzet, nieuwsartikelen verzamelt, vertaalt en publiceert.
-- `artikelen/`: Hier worden de gegenereerde HTML-bestanden van de artikelen opgeslagen.
-- `templates/`: Bevat HTML-templates voor de homepage en de individuele artikelen.
-- `requirements.txt`: Lijst met alle benodigde Python-pakketten.
+- **`NewsGenerator_Flask.py`**: Het script dat nieuwsartikelen verzamelt, samenvat en op een lokale server toont via Flask.
+- **`NewsGenerator_WordPress.py`**: De WordPress-versie van de applicatie die de artikelen direct naar WordPress publiceert.
+- **`templates/`**: Bevat de HTML-templates voor de Flask-interface.
+- **`artikelen/`**: Opslag van lokaal gegenereerde artikelen in HTML.
+- **`requirements.txt`**: Lijst van benodigde Python-pakketten.
 
 ### Technologieën
-- **Flask**: Voor het draaien van de webserver.
+- **Flask**: Voor het draaien van de webserver in de lokale versie.
+- **WordPress API**: Voor het publiceren van artikelen op een WordPress-site.
 - **RSS-feeds**: Voor het verzamelen van nieuwsartikelen.
 - **BeautifulSoup**: Voor het scrapen van volledige artikelen.
-- **Cohere AI API**: Voor het genereren van samenvattingen en inzichten.
+- **Cohere AI API**: Voor het genereren van samenvattingen en nieuwe titels.
 
 ### Ethische Overwegingen
 
-Bij de ontwikkeling van dit project hebben we expliciet rekening gehouden met enkele belangrijke ethische kwesties die naar voren komen bij het gebruik van nieuwsautomatisering en generative AI:
+#### Accuraatheid van Informatie
+Hoewel AI krachtig is in het samenvatten van nieuws, is er een mogelijkheid dat het fouten maakt. Daarom blijft de originele bron beschikbaar zodat lezers deze kunnen vergelijken met de AI-gegenereerde tekst.
 
-#### Accuraatheid van Informatie:
+#### Copyright en Bronvermelding
+De originele bron en auteur worden altijd vermeld, samen met een link naar het originele artikel. Dit verzekert dat we voldoen aan copyrightregels.
 
-We begrijpen dat AI-modellen zoals Cohere krachtige hulpmiddelen zijn voor het samenvatten van nieuws, maar ze kunnen soms onnauwkeurigheden bevatten. Om dit te beperken, hebben we ervoor gezorgd dat de volledige tekst van het originele artikel beschikbaar blijft naast de AI-gegenereerde samenvatting, zodat gebruikers de originele bron altijd kunnen raadplegen. We moedigen lezers aan om AI-output kritisch te beoordelen en niet blindelings te vertrouwen.
-
-#### Copyright en Bronvermelding:
-
-We maken gebruik van openbare RSS-feeds en geven altijd de originele auteur en bron weer bij elk artikel. De bron wordt expliciet vermeld in de metadata van elk gegenereerd HTML-bestand en in de weergegeven artikelen op de website. Dit zorgt ervoor dat we voldoen aan copyrightregels en de auteurs de eer krijgen die hen toekomt.
-
-#### Transparantie van AI-gebruik:
-
-Het gebruik van AI wordt in alle gegenereerde artikelen expliciet vermeld. Lezers worden geïnformeerd dat bepaalde delen van de inhoud, zoals samenvattingen en analyses, door een AI zijn gegenereerd. Dit bevordert transparantie en zorgt ervoor dat gebruikers weten dat er geen menselijke journalist de samenvatting heeft geschreven.
+#### Transparantie van AI-gebruik
+Lezers worden geïnformeerd wanneer een samenvatting of inzicht is gegenereerd door AI, zodat zij weten dat de tekst niet door een menselijke journalist is geschreven.
 
 ### Auteurs
 Dit project is gemaakt door Goudantov Bers en Van Camp Loïc.
