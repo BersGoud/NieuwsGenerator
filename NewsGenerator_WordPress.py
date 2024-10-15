@@ -10,7 +10,7 @@ INFO = "Nieuws Generator, gemaakt door: \nGoudantov Bers, Van Camp Loïc\n"
 print(INFO)
 
 # Cohere API key
-cohere_client = Client('olCf36tGzsK7oLU6UWkSSO5iqUaisf7kCgPvTa9N')
+cohere_client = Client('OyG6t01OBkiODxK456qALJ84DMzJJZ4VD4vYtt1e')
 
 # WordPress API details
 WP_URL = "https://yapnews.meubel-centrum.be/wp-json/wp/v2/posts"  # Wordpress url
@@ -20,7 +20,7 @@ WP_PASSWORD = "EZFN vKP0 AbV3 PMbI As4T vP2o"  # Applicatie password
 
 # Functie om titel te genereren
 def generate_sensational_title(original_title):
-    prompt = f"Transformeer de volgende titel in een sensationele titel: '{original_title}'"
+    prompt = f"Transformeer de volgende titel in een sensationele titel in het nederlands: '{original_title}'"
     response = cohere_client.generate(
         prompt=prompt,
         model="command-nightly",
@@ -33,8 +33,14 @@ def generate_sensational_title(original_title):
 # Functie om RSS op te halen
 def fetch_and_parse_rss_feed(url):
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Accept-Language': 'nl-NL,nl;q=0.9,en-US;q=0.8,en;q=0.7',
+        'Upgrade-Insecure-Requests': '1',
     }
+    
+    response = requests.get('http://httpbin.org/headers')
     response = requests.get(url, headers=headers)
     response.raise_for_status()  
     root = ET.fromstring(response.content)
@@ -92,7 +98,24 @@ def fetch_full_article(link, retries=2, delay=5):
 
     return "Unknown error occurred.", None
 
-# Function om foto van het nieuwsbron op te halen
+# Functie om een categorie te bepalen op basis van de samenvatting
+def determine_category(text):
+    prompt = f"Op basis van de volgende tekst, selecteer een categorie (economie, politiek, sociaal, algemeen): {text}"
+    response = cohere_client.generate(
+        prompt=prompt,
+        model="command-nightly",
+        max_tokens=10,
+        temperature=0.5,
+        stop_sequences=["\n"],
+    )
+    categories = ['economie', 'politiek', 'sociaal', 'algemeen']
+    if response.generations:
+        category = response.generations[0].text.strip().lower()
+        if category in categories:
+            return category
+    return "algemeen"  # default category
+
+# Functie om foto te uploaden naar WordPress
 def upload_image_to_wordpress(image_url):
     try:
         response = requests.get(image_url)
@@ -118,17 +141,16 @@ def upload_image_to_wordpress(image_url):
             return media_response.json().get('id')  
         else:
             print(f"Fout bij het uploaden van afbeelding: {media_response.text}")
-            print(f"Status code: {media_response.status_code}, Headers: {media_response.headers}")
             return None
     except Exception as e:
         print(f"Fout bij het ophalen van afbeelding: {str(e)}")
         return None
 
-# Functie om het artikel te ontbinden en doorgeven aan het LLM om zo tot een nieuwe artikel te genereren
-def process_articles(articles, number_of_articles):
+# Functie om artikelen te verwerken en categorie toe te voegen
+def process_articles(articles):
     processed_articles = []
     
-    for i, article in enumerate(articles[:number_of_articles]):  
+    for i, article in enumerate(articles):  
         print(f"Verwerken artikel {i + 1}: {article['link']}")
 
         start_time = time.time()  
@@ -144,10 +166,9 @@ def process_articles(articles, number_of_articles):
             f"Author: {article['creator']}\n"
             f"Publication Date: {article['pub_date']}\n\n"
             f"Full Article: {full_text}\n\n"
-            "Vat dit artikel gedetailleerd samen en genereer een nieuwe artikel terug. Geef inzichten in de mogelijke economische, politieke en wereldwijde implicaties in ten minste 5 regels tot maximum 20 regels."
+            "Vat dit artikel samen en geef inzichten over economische, politieke of sociale implicaties."
         )
 
-        # Gebruik Cohere API om calls uit te voeren
         ai_response = cohere_client.generate(
             prompt=prompt,
             model="command-nightly",
@@ -155,15 +176,15 @@ def process_articles(articles, number_of_articles):
             temperature=0.5,
             stop_sequences=["\n\n"],
         )
-        
-        # Check indien de AI output deftig output geeft
+
         if ai_response.generations and ai_response.generations[0].text.strip():
             article['ai_output'] = ai_response.generations[0].text.strip()
+            article['category'] = determine_category(article['ai_output'])
         else:
             article['ai_output'] = "Geen inhoud gegenereerd."
+            article['category'] = "algemeen"
 
         article['image_url'] = image_url
-
         processed_articles.append(article)
 
         end_time = time.time()
@@ -172,22 +193,28 @@ def process_articles(articles, number_of_articles):
 
     return processed_articles
 
-# Functie om de verwerkte gegevens up te loaden naar de wordpress website
+# Functie om artikelen op WordPress te posten
 def post_to_wordpress(articles):
     for article in articles:
         media_id = None
         if article['image_url']:
             media_id = upload_image_to_wordpress(article['image_url'])
 
-        # Bereid data voor publishen
         data = {
             'title': article['title'],
-            'content': f"<h2>{article['title']}</h2><p><strong>Auteur:</strong> {article['creator']}</p><p><strong>Publicatie Datum:</strong> {article['pub_date']}</p><p>{article['ai_output']}</p><p>Origineel Artikel: <a href='{article['link']}'>Link</a></p>",
-            'status': 'publish',  
+            'content': (
+                f"<h2>{article['title']}</h2>"
+                f"<img src='{article['image_url']}' alt='Article Image'>"
+                f"<p><strong>Auteur:</strong> {article['creator']}</p>"
+                f"<p><strong>Publicatie Datum:</strong> {article['pub_date']}</p>"
+                f"<p><strong>Categorie:</strong> {article['category']}</p>"
+                f"<p>{article['ai_output']}</p>"
+                f"<p>Origineel Artikel: <a href='{article['link']}'>Link</a></p>"
+            ),
+            'status': 'publish',
             'featured_media': media_id,  
         }
 
-        # Post naar Wordpress
         response = requests.post(
             WP_URL,
             auth=HTTPBasicAuth(WP_USER, WP_PASSWORD),
@@ -197,23 +224,15 @@ def post_to_wordpress(articles):
         if response.status_code == 201:
             print(f"Artikel '{article['title']}' succesvol gepubliceerd op WordPress.")
 
-# Applicatie gebruik
+# Applicatie met automatische verwerking elke 30 seconden
 def main():
     rss_feed_url = "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best"  # Reuters RSS feed
     
-    # Prompt de gebruiker voor het aantal artikels
-    try:
-        number_of_articles = int(input("Hoeveel artikels wilt u verwerken? Voer een nummer in: "))
-    except ValueError:
-        print("Ongeldige invoer. Het aantal wordt standaard ingesteld op 5.")
-        number_of_articles = 5  
-
-    # Fetch RSS feed en verwerk artikels
-    articles = fetch_and_parse_rss_feed(rss_feed_url)
-    processed_articles = process_articles(articles, number_of_articles)
-
-    # Post artikels op WordPress
-    post_to_wordpress(processed_articles)
+    while True:
+        articles = fetch_and_parse_rss_feed(rss_feed_url)
+        processed_articles = process_articles(articles[:1])  # Verwerk één artikel per keer
+        post_to_wordpress(processed_articles)
+        time.sleep(30)  # Wacht 30 seconden voor het volgende artikel
 
 if __name__ == "__main__":
     main()
