@@ -2,6 +2,7 @@
 
 ## Inhoud
 - [Overzicht](#overzicht)
+- [WorkFLow](#WorkFLow)
 - [Installatie](#installatie)
 - [Gebruik](#gebruik)
 - [Structuur van het project](#structuur-van-het-project)
@@ -18,6 +19,9 @@ Dit project automatiseert het verzamelen, verwerken en publiceren van nieuwsarti
 - **NewsGenerator_Flask.py**: De Flask-gebaseerde versie die lokaal draait.
 - **NewsGenerator_WordPress.py**: De WordPress-gebaseerde versie die artikelen direct naar een WordPress-site publiceert.
 
+## WorkFLow
+![ Alt Text](WorkFlow-Diagram.png)
+ 
 ### Installatie
 Volg deze stappen om het project te installeren:
 
